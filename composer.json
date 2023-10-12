@@ -1,6 +1,6 @@
 {
-    "name": "mediconesystems/livewire-datatables",
-    "description": "Advanced datatables using Laravel, Livewire, Tailwind CSS and Alpine JS",
+    "name": "t-raven/livewire-datatables",
+    "description": "Advanced datatables using Laravel, Livewire, Tailwind CSS and Alpine JS with fixed 587 issue",
     "keywords": [
         "php",
         "laravel",
