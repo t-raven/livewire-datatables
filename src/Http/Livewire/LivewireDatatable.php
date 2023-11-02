@@ -414,7 +414,11 @@ class LivewireDatatable extends Component
                     if ($column->select instanceof Expression) {
                         $sep_string = config('database.default') === 'pgsql' ? '"' : '`';
 
-                        return new Expression($column->select->getValue() . ' AS ' . $sep_string . $column->name . $sep_string);
+                        if (version_compare('10.0.0', app()->version()) == -1) {
+                            return new Expression($column->select->getValue(DB::getQueryGrammar()) . ' AS ' . $sep_string . $column->name . $sep_string);
+                        } else {
+                            return new Expression($column->select->getValue() . ' AS ' . $sep_string . $column->name . $sep_string);
+                        }
                     }
 
                     if (is_array($column->select)) {
@@ -440,8 +444,8 @@ class LivewireDatatable extends Component
             return $this->query->getModel()->getTable() . '.' . ($column->base ?? Str::before($column->name, ':'));
         }
 
-        $relations = explode('.', Str::before(($additional ?: $column->name), ':'));
-        $aggregate = Str::after(($additional ?: $column->name), ':');
+        $relations = explode('.', Str::before($additional ?: $column->name, ':'));
+        $aggregate = Str::after($additional ?: $column->name, ':');
 
         if (! method_exists($this->query->getModel(), $relations[0])) {
             return $additional ?: $column->name;
@@ -712,7 +716,6 @@ class LivewireDatatable extends Component
     public function getSortString($dbtable)
     {
         $column = $this->freshColumns[$this->sort];
-
         switch (true) {
             case $column['sort']:
                 return $column['sort'];
@@ -724,6 +727,10 @@ class LivewireDatatable extends Component
 
             case is_array($column['select']):
                 return Str::before($column['select'][0], ' AS ');
+                break;
+
+            case is_object($column['select']):
+                return Str::before($column['select']->getValue(DB::connection()->getQueryGrammar()), ' AS ');
                 break;
 
             case $column['select']:
@@ -1352,10 +1359,13 @@ class LivewireDatatable extends Component
                             foreach ($this->getColumnFilterStatement($i) as $column) {
                                 $query->when(is_array($column), function ($query) use ($search, $column) {
                                     foreach ($column as $col) {
-                                        $query->orWhereRaw('LOWER(' . (Str::contains(mb_strtolower($column), 'concat') ? '' : $this->tablePrefix) . $col . ') like ?', '%' . mb_strtolower($search) . '%');
+                                        $query->orWhereRaw('LOWER(' . (Str::contains(mb_strtolower($column->getValue(DB::connection()->getQueryGrammar())), 'concat') ? '' : $this->tablePrefix) . $col . ') like ?', '%' . mb_strtolower($search) . '%');
                                     }
                                 }, function ($query) use ($search, $column) {
-                                    $query->orWhereRaw('LOWER(' . (Str::contains(mb_strtolower($column), 'concat') ? '' : $this->tablePrefix) . $column . ') like ?', '%' . mb_strtolower($search) . '%');
+                                    $stringColumn = is_string($column)
+                                        ? $column
+                                        : $column->getValue(DB::connection()->getQueryGrammar());
+                                    $query->orWhereRaw('LOWER(' . (Str::contains(mb_strtolower($stringColumn), 'concat') ? '' : $this->tablePrefix) . $stringColumn . ') like ?', '%' . mb_strtolower($search) . '%');
                                 });
                             }
                         });
@@ -1473,7 +1483,10 @@ class LivewireDatatable extends Component
                             $query->orWhere(function ($query) use ($index, $value) {
                                 foreach ($this->getColumnFilterStatement($index) as $column) {
                                     $column = is_array($column) ? $column[0] : $column;
-                                    $query->orWhereRaw('LOWER(' . $this->tablePrefix . $column . ') like ?', [mb_strtolower("%$value%")]);
+                                    $columnString = is_string($column)
+                                        ? $column
+                                        : $column->getValue(DB::connection()->getQueryGrammar());
+                                    $query->orWhereRaw('LOWER(' . $this->tablePrefix . $columnString . ') like ?', [mb_strtolower("%$value%")]);
                                 }
                             });
                         }
